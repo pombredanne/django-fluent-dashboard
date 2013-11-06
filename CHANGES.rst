@@ -1,7 +1,28 @@
-Changes in version 0.4.0
+Changes in version 0.3.5
 ------------------------
 
-None yet
+* Added filebrowser icon.
+* Fix custom user model support of Django 1.5.
+* Fix requirements of extras_require cachestatus
+* Hide cache status group by default.
+
+
+Changes in version 0.3.4
+------------------------
+
+* Fixed a packaging error, ``dashboard.css`` was missing in the dist.
+
+
+Changes in version 0.3.3
+------------------------
+
+* Added more Oxygen icons.
+* Added icon for *sharedcontent* plugin of django-fluent-contents_.
+* Fixed ``KeyError`` when a model has add support, but no edit support.
+* Fixed icon layout when a model has no permissions to add/edit.
+* Fixed welcome text in personal module, remove pages link if the user has no permission to edit pages.
+* Bump required version of django-admin-tools_ to 0.5.1, which has Django 1.4/1.5 support.
+
 
 Changes in version 0.3.2
 ------------------------
@@ -56,3 +77,7 @@ Version 0.1.0
 -------------
 
 Initial internal release
+
+
+.. _django-admin-tools: https://bitbucket.org/izi/django-admin-tools/wiki/Home
+.. _django-fluent-contents: https://github.com/edoburu/django-fluent-contents

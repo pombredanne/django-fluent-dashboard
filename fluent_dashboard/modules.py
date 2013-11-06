@@ -10,6 +10,7 @@ This package adds the following classes:
 """
 import logging
 import socket
+import django
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.urlresolvers import reverse, NoReverseMatch
@@ -59,12 +60,15 @@ class PersonalModule(modules.LinkList):
         Initializes the link list.
         """
         super(PersonalModule, self).init_with_context(context)
-
         current_user = context['request'].user
+        if django.VERSION < (1, 5):
+            current_username = current_user.first_name or current_user.username
+        else:
+            current_username = current_user.get_short_name() or current_user.get_username()
         site_name = get_admin_site_name(context)
 
         # Personalize
-        self.title = _('Welcome,') + ' ' + (current_user.first_name or current_user.username)
+        self.title = _('Welcome,') + ' ' + (current_username)
 
         # Expose links
         self.pages_link = None
@@ -76,12 +80,17 @@ class PersonalModule(modules.LinkList):
             try:
                 app_label, model_name = self.cms_page_model
                 model = get_model(app_label, model_name)
-                self.pages_title = model._meta.verbose_name_plural.lower()
-                self.pages_link = reverse('{site}:{app}_{model}_changelist'.format(site=site_name, app=app_label.lower(), model=model_name.lower()))
+                pages_title = model._meta.verbose_name_plural.lower()
+                pages_link = reverse('{site}:{app}_{model}_changelist'.format(site=site_name, app=app_label.lower(), model=model_name.lower()))
             except AttributeError:
                 raise ImproperlyConfigured("The value {0} of FLUENT_DASHBOARD_CMS_PAGE_MODEL setting (or cms_page_model value) does not reffer to an existing model.".format(self.cms_page_model))
             except NoReverseMatch:
                 pass
+            else:
+                # Also check if the user has permission to view the module.'
+                if current_user.has_perm('{0}.{1}'.format(model._meta.app_label, model._meta.get_change_permission())):
+                    self.pages_title = pages_title
+                    self.pages_link = pages_link
 
     def is_empty(self):
         # Make sure the element is rendered.
@@ -120,12 +129,12 @@ class AppIconList(modules.AppList):
         # Standard model only has a title, change_url and add_url.
         # Restore the app_name and name, so icons can be matched.
         for app in apps:
-            app_name = app['url'].strip('/').split('/')[-1]   # /foo/admin/appname/
+            app_name = self._get_app_name(app)
             app['name'] = app_name
 
             for model in app['models']:
                 try:
-                    model_name = model['change_url'].strip('/').split('/')[-1]   # /foo/admin/appname/modelname
+                    model_name = self._get_model_name(model)
                     model['name'] = model_name
                     model['icon'] = self.get_icon_for_model(app_name, model_name) or appsettings.FLUENT_DASHBOARD_DEFAULT_ICON
                 except ValueError:
@@ -134,6 +143,25 @@ class AppIconList(modules.AppList):
                 # Automatically add STATIC_URL before relative icon paths.
                 model['icon'] = self.get_icon_url(model['icon'])
                 model['app_name'] = app_name
+
+
+    def _get_app_name(self, appdata):
+        """
+        Extract the app name from the ``appdata`` that *django-admin-tools* provides.
+        """
+        return appdata['url'].strip('/').split('/')[-1]   # /foo/admin/appname/
+
+
+    def _get_model_name(self, modeldata):
+        """
+        Extract the model name from the ``modeldata`` that *django-admin-tools* provides.
+        """
+        if 'change_url' in modeldata:
+            return modeldata['change_url'].strip('/').split('/')[-1]   # /foo/admin/appname/modelname
+        elif 'add_url' in modeldata:
+            return modeldata['add_url'].strip('/').split('/')[-2]      # /foo/admin/appname/modelname/add
+        else:
+            raise ValueError("Missing attributes in modeldata to find the model name!")
 
 
     def get_icon_for_model(self, app_name, model_name, default=None):
@@ -215,7 +243,9 @@ class CacheStatusGroup(modules.Group):
     #: The default title
     title = _("System status")
     #: The default display mode, can be "tabs", "stacked" or "accordion"
-    display = "accordion"
+    display = "stacked"
+    #: Hide by default
+    enabled = False
 
     def init_with_context(self, context):
         """
